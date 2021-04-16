@@ -11,6 +11,9 @@ from scipy.ndimage import gaussian_filter
 
 
 def Resize_Image(image, scalingFactor):
+    #Parameters: image = the opencv array of the image; scalingFactor=the percentage of the original for new image size
+    #This function simply resizes the image for ease of processing 
+
     img = image
     scale_percent = scalingFactor # percent of original size
     width = int(img.shape[1] * scale_percent / 100)
@@ -39,11 +42,13 @@ def General_Gaussian_FilterBlur(image, gauss=None):
         #          [0.111842, 0.114094, 0.111842],
         #          [0.109634, 0.111842, 0.109634],
         #          ]
+        #gaus array was changed to a very basic gaussian blur
         gauss = [[1, 2, 1],
                  [2, 4, 2],
                  [1, 2, 1],
                  ]
-        # sobel = [[1/9 for i in range(3)] for i in range(3)]
+    else:
+        gauss = gauss
 
     h = (len(image) - (len(gauss) - 1))
     w = (len(image[0]) - (len(gauss[0]) - 1))
@@ -51,14 +56,14 @@ def General_Gaussian_FilterBlur(image, gauss=None):
     #out = np.zeros((h+1, w+1, 3), np.float32)
     out = np.zeros((h+2, w+2), np.uint8)
 
-    for i in range(h):
-        for j in range(w):
-            sum = 0
-            for ki in range(len(gauss)):
-                for kj in range(len(gauss[0])):
-                    sum += int(image[i + ki][j + kj] * gauss[ki][kj])
+    for i in range(h): #navigate the rows
+        for j in range(w): #navigate the columns
+            sum = 0 #value for new pixel
+            for ki in range(len(gauss)): #navigate the kernel rows
+                for kj in range(len(gauss[0])): #navigate the kernel columns
+                    sum += int(image[i + ki][j + kj] * gauss[ki][kj]) #multiple the kernel value by the image array pixel
 
-            out[i][j] = sum/16
+            out[i][j] = sum/16 #normalizing the blur by dividing by the kernel weight
 
     return out
 
@@ -78,6 +83,7 @@ def Create_PointSpreadFunction(windowSize, valueList):
     row_iterator = 0
     #Below I create a List of Lists for the PSF and then fill in each value of the list
     #Currently each element gets its own list, though that could be changed easily
+    #Its basically just a bunch of iterators creating the lists and filling each spot in
     while row_iterator < windowLength:
         blankBaseMatrix.append([])
         row_iterator = row_iterator + 1
@@ -110,10 +116,38 @@ def PreBuilt_Gaussian_Blur(imageArray):
     blurredGausImage = gaussian_filter(imageArray, sigma=2)
     return blurredGausImage
 
+def Blur_Estimate(estimateArray, blurFilter):
+    #Parameters: estimateArray=the current 'I' value to be blurred; blurFilter=The kernel to blur with
+    #Takes the estimate array (which is 'I' in the formula) and blurs it with a gaussian kernel
+    #This function can be built up for different types of blurs once those filters are integrated
+
+    currentEstimate = estimateArray
+    if blurFilter is None:
+        newEstimate = General_Gaussian_FilterBlur(currentEstimate)
+    else:
+        newEstimate = General_Gaussian_FilterBlur(currentEstimate, blurFilter)
+
+    return newEstimate
+
+def Divide_OriginalBlurredImage(originalBlurredImage, currentEstimate, divisorArray, PSF):
+
+    # This is following the RLA multiplicative forumla:
+    #   Ok+1 = Ok X ( I/(Ok ** PSF)**PSF(Transposed) )
+    #       originalBlurredImage = I;   currentEstimate=Ok; 
+    #       divisorArray = (Ok**PSF);   newEstimate= Ok+1
+
+    I = originalBlurredImage #From the formula
+    denominator_array = divisorArray
+    dividend = np.divide(I, denominator_array)
+    transposedPSF = np.transpose(PSF)
+    correctionFactor = General_Gaussian_FilterBlur(dividend)
+    newEstimate = np.multiply(currentEstimate, correctionFactor)
+
+    return newEstimate
 
 
 
-
+     
 
 
 
@@ -122,9 +156,9 @@ def main():
     UnblurredImage = "NikonSharp.jpg"
     BlurredImage = "NikonBlurred.jpg"
  
-    #LOAD IMAGES
-    #Here we load the two images into the program as matrices. We create copies and blank images of 
-    #identical sizes for use in other parts of the Algorithm. 
+#LOAD IMAGES
+#Here we load the two images into the program as matrices. We create copies and blank images of 
+#identical sizes for use in other parts of the Algorithm. 
 
     origUnblurredImage = cv2.imread(UnblurredImage, 1)# the '1' flag means load a color image, 0 is grayscale, -1=unchanged alpha channel
     origBlurredImage = cv2.imread(BlurredImage, 1) # Loads the blurred image matrix
@@ -137,6 +171,8 @@ def main():
     print(PSF)
 
 # Below we display several images, testing the pre built greyScale and guassian blur functions
+# Many of the image displays are commented out for ease of running the program, but they can be 
+# uncommented for troubleshooting purposes, or removed later for cleaner code. 
 
     # cv2.imshow('Before Gaussian Blur', origUnblurredImage) #Display Image with title
     # cv2.waitKey(0)# Infinite Delay until keystroke
