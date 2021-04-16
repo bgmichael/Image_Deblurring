@@ -113,10 +113,10 @@ def Create_PointSpreadFunction(windowSize, valueList):
     return blankBaseMatrix
 
 def PreBuilt_Gaussian_Blur(imageArray):
-    blurredGausImage = gaussian_filter(imageArray, sigma=2)
+    blurredGausImage = gaussian_filter(imageArray, sigma=3)
     return blurredGausImage
 
-def Blur_Estimate(estimateArray, blurFilter):
+def Blur_Estimate(estimateArray, blurFilter=None):
     #Parameters: estimateArray=the current 'I' value to be blurred; blurFilter=The kernel to blur with
     #Takes the estimate array (which is 'I' in the formula) and blurs it with a gaussian kernel
     #This function can be built up for different types of blurs once those filters are integrated
@@ -129,7 +129,7 @@ def Blur_Estimate(estimateArray, blurFilter):
 
     return newEstimate
 
-def Divide_OriginalBlurredImage(originalBlurredImage, currentEstimate, divisorArray, PSF):
+def Divide_OriginalBlurredImage(originalBlurredImage, currentEstimate, PSF):
 
     # This is following the RLA multiplicative forumla:
     #   Ok+1 = Ok X ( I/(Ok ** PSF)**PSF(Transposed) )
@@ -137,11 +137,52 @@ def Divide_OriginalBlurredImage(originalBlurredImage, currentEstimate, divisorAr
     #       divisorArray = (Ok**PSF);   newEstimate= Ok+1
 
     I = originalBlurredImage #From the formula
-    denominator_array = divisorArray
-    dividend = np.divide(I, denominator_array)
+    denominator_array = Blur_Estimate(currentEstimate, PSF)
+    dividend = np.floor_divide(I, denominator_array)
     transposedPSF = np.transpose(PSF)
-    correctionFactor = General_Gaussian_FilterBlur(dividend)
+    correctionFactor = General_Gaussian_FilterBlur(dividend, transposedPSF)
     newEstimate = np.multiply(currentEstimate, correctionFactor)
+
+    return newEstimate
+
+
+def Main_Iteration(I, Ok, PSF, numberOfIterations):
+
+    newEstimate = Ok
+    iterator = 0
+    while iterator < numberOfIterations:
+        newEstimate = Divide_OriginalBlurredImage(I, newEstimate, PSF)
+        iterator = iterator + 1
+
+        text_string = 'Main iteration %s' %iterator
+        print(text_string)
+        cv2.imshow(text_string , newEstimate)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+    
+    return newEstimate
+
+def PrebuiltVersion_Main_Iteration(I, Ok, PSF, numberOfIterations):
+
+    newEstimate = Ok
+    iterator = 0
+
+    while iterator < numberOfIterations:
+
+        #I = originalBlurredImage #From the formula
+        denominator_array = PreBuilt_Gaussian_Blur(newEstimate)
+        dividend = np.floor_divide(I, denominator_array)
+        #transposedPSF = np.transpose(PSF)
+        #correctionFactor = General_Gaussian_FilterBlur(dividend, transposedPSF)
+        newEstimate = np.multiply(newEstimate, dividend)
+
+        iterator = iterator + 1
+
+        text_string = 'Prebuilt Main iteration %s' %iterator
+        print(text_string)
+        cv2.imshow(text_string , newEstimate)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
 
     return newEstimate
 
@@ -167,42 +208,45 @@ def main():
     imageWidth = origBlurredImage.shape[0] #Width
     blackImage = np.zeros((imageHeight, imageWidth)) # Create a black image (zeroes array) of same size, for later use. 
 
-    PSF = Create_PointSpreadFunction(9, [1,2,1,2,4,2,1,2,1])
-    print(PSF)
+    # PSF = Create_PointSpreadFunction(9, [1,2,1,2,4,2,1,2,1]) #change this function to every row gets its own list
+    # print(PSF)
+    PSF =       [[1, 2, 1],
+                 [2, 4, 2],
+                 [1, 2, 1],
+                 ] 
 
 # Below we display several images, testing the pre built greyScale and guassian blur functions
 # Many of the image displays are commented out for ease of running the program, but they can be 
 # uncommented for troubleshooting purposes, or removed later for cleaner code. 
 
-    # cv2.imshow('Before Gaussian Blur', origUnblurredImage) #Display Image with title
-    # cv2.waitKey(0)# Infinite Delay until keystroke
-    # cv2.destroyAllWindows() #get rid of the window
+ 
 
-    #Run the gaussian blur on the sharp colored image
-    coloredBlurAttempt = PreBuilt_Gaussian_Blur(origUnblurredImage)
+    # #Run the gaussian blur on the sharp colored image
+    # coloredBlurAttempt = PreBuilt_Gaussian_Blur(origUnblurredImage)
     # cv2.imshow('After Colored Gaussian Blur', coloredBlurAttempt)
     # cv2.waitKey(0)
     # cv2.destroyAllWindows()
 
-    #GreyScale the sharp image and display
+    # #GreyScale the sharp image and display
     greyUnblurredImage = GreyScale_Image(origUnblurredImage)
-    # cv2.imshow('GreyScale Before Gaussian Blur', greyUnblurredImage)
+    
+
+    scaledOriginalBlurred = Resize_Image(origBlurredImage, 20)
+    scaledGreyUnblurredImage = Resize_Image(greyUnblurredImage, 20)
+    # selfFilterImage = General_Gaussian_FilterBlur(scaledGreyUnblurredImage)
+    # cv2.imshow('General Gaus blur on greyScale Image', selfFilterImage)
     # cv2.waitKey(0)
     # cv2.destroyAllWindows()
-
-    #Blur the GreyScale image and display
-    greyScaleBlurAttempt = PreBuilt_Gaussian_Blur(greyUnblurredImage)
-    # cv2.imshow('After GreyScale Gaussian Blur', greyScaleBlurAttempt)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
-
-    scaledGreyUnblurredImage = Resize_Image(greyUnblurredImage, 30)
-    Self_Filter_Image = General_Gaussian_FilterBlur(scaledGreyUnblurredImage)
-    cv2.imshow('General Gaus blur on greyScale Image', Self_Filter_Image)
+    
+    blurEstimateTest = Blur_Estimate(scaledGreyUnblurredImage)
+    cv2.imshow('Blur_Estimate on resized greyScale Image', blurEstimateTest)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
+    #Main_Iteration(scaledGreyUnblurredImage, blurEstimateTest, PSF, 3)
+    PrebuiltVersion_Main_Iteration(scaledGreyUnblurredImage, blurEstimateTest, PSF, 10)
     
+
 
 if __name__ == "__main__":
     main()
