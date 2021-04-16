@@ -49,7 +49,7 @@ def General_Gaussian_FilterBlur(image, gauss=None):
     w = (len(image[0]) - (len(gauss[0]) - 1))
 
     #out = np.zeros((h+1, w+1, 3), np.float32)
-    out = np.zeros((h+2, w+2))
+    out = np.zeros((h+2, w+2), np.int8)
 
     for i in range(h):
         for j in range(w):
