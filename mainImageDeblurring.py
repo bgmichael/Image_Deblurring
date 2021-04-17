@@ -156,9 +156,13 @@ def Main_Iteration(I, Ok, PSF, numberOfIterations):
 
         text_string = 'Main iteration %s' %iterator
         print(text_string)
-        cv2.imshow(text_string , newEstimate)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        # cv2.imshow(text_string , newEstimate)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
+
+    cv2.imshow(text_string , newEstimate)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
     
     return newEstimate
 
@@ -239,12 +243,12 @@ def main():
     # cv2.destroyAllWindows()
     
     blurEstimateTest = Blur_Estimate(scaledGreyUnblurredImage)
-    cv2.imshow('Blur_Estimate on resized greyScale Image', blurEstimateTest)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    # cv2.imshow('Blur_Estimate on resized greyScale Image', blurEstimateTest)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
 
-    #Main_Iteration(scaledGreyUnblurredImage, blurEstimateTest, PSF, 3)
-    PrebuiltVersion_Main_Iteration(scaledGreyUnblurredImage, blurEstimateTest, PSF, 10)
+    Main_Iteration(scaledGreyUnblurredImage, blurEstimateTest, PSF, 15)
+    #PrebuiltVersion_Main_Iteration(scaledGreyUnblurredImage, blurEstimateTest, PSF, 10)
     
 
 
