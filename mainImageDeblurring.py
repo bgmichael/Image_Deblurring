@@ -1,5 +1,6 @@
 #Image deblurring using the Richardson-Lucy Algorithm
 
+from typing import List
 import numpy as np
 import math
 import cv2
@@ -8,6 +9,7 @@ from matplotlib import pyplot as plt
 from PIL import Image, ImageFilter
 import scipy
 from scipy.ndimage import gaussian_filter
+import os
 
 
 def Resize_Image(image, scalingFactor):
@@ -24,10 +26,11 @@ def Resize_Image(image, scalingFactor):
     resized = cv2.resize(img, dimensions, interpolation = cv2.INTER_AREA)
  
     print('Resized Dimensions : ',resized.shape)
+    print(len(resized.shape))
  
-    cv2.imshow("Resized image", resized)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    # cv2.imshow("Resized image", resized)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
 
     return resized
 
@@ -50,20 +53,46 @@ def General_Gaussian_FilterBlur(image, gauss=None):
     else:
         gauss = gauss
 
-    h = (len(image) - (len(gauss) - 1))
-    w = (len(image[0]) - (len(gauss[0]) - 1))
+    if len(image.shape) == 2:
 
-    #out = np.zeros((h+1, w+1, 3), np.float32)
-    out = np.zeros((h+2, w+2), np.uint8)
 
-    for i in range(h): #navigate the rows
-        for j in range(w): #navigate the columns
-            sum = 0 #value for new pixel
-            for ki in range(len(gauss)): #navigate the kernel rows
-                for kj in range(len(gauss[0])): #navigate the kernel columns
-                    sum += int(image[i + ki][j + kj] * gauss[ki][kj]) #multiple the kernel value by the image array pixel
+        h = (len(image) - (len(gauss) - 1))
+        w = (len(image[0]) - (len(gauss[0]) - 1))
 
-            out[i][j] = sum/16 #normalizing the blur by dividing by the kernel weight
+        #out = np.zeros((h+1, w+1, 3), np.float32)
+        out = np.zeros((h+2, w+2), np.uint8)
+
+        for i in range(h): #navigate the rows
+            for j in range(w): #navigate the columns
+                sum = 0 #value for new pixel
+                for ki in range(len(gauss)): #navigate the kernel rows
+                    for kj in range(len(gauss[0])): #navigate the kernel columns
+                        sum += int(image[i + ki][j + kj] * gauss[ki][kj]) #multiple the kernel value by the image array pixel
+
+                out[i][j] = sum/16 #normalizing the blur by dividing by the kernel weight
+
+    elif len(image.shape) == 3:
+
+        h = (len(image) - (len(gauss) - 1))
+        w = (len(image[0]) - (len(gauss[0]) - 1))
+        d = 3
+
+        out = np.zeros((h+2, w+2, 3), np.uint8)
+
+        for i in range(h): #navigate the rows
+            for j in range(w): #navigate the columns
+                for k in range(d):
+                    sum = 0
+                    for ki in range(len(gauss)):
+                        for kj in range(len(gauss[0])):
+                            image_pixel_value = image[i + ki][j + kj][k]
+                            filter_value = gauss[ki][kj]
+                            sum = sum + int(image[i + ki][j + kj][k] * gauss[ki][kj])
+
+                    out[i][j][k] = sum/16
+                    #print(out[i][j][k])
+        
+        #print(out)
 
     return out
 
@@ -113,7 +142,7 @@ def Create_PointSpreadFunction(windowSize, valueList):
     return blankBaseMatrix
 
 def PreBuilt_Gaussian_Blur(imageArray):
-    blurredGausImage = gaussian_filter(imageArray, sigma=3)
+    blurredGausImage = gaussian_filter(imageArray, sigma=1)
     return blurredGausImage
 
 def Blur_Estimate(estimateArray, blurFilter=None):
@@ -139,9 +168,14 @@ def Divide_OriginalBlurredImage(originalBlurredImage, currentEstimate, PSF):
     I = originalBlurredImage #From the formula
     denominator_array = Blur_Estimate(currentEstimate, PSF)
     dividend = np.floor_divide(I, denominator_array)
-    transposedPSF = np.transpose(PSF)
-    correctionFactor = General_Gaussian_FilterBlur(dividend, transposedPSF)
-    newEstimate = np.multiply(currentEstimate, correctionFactor)
+    #transposedPSF = np.transpose(PSF)
+    #correctionFactor = General_Gaussian_FilterBlur(dividend, transposedPSF)
+
+    # cv2.imshow("Correction FActor Within Divide Function" , correctionFactor)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
+
+    newEstimate = np.multiply(currentEstimate, dividend)
 
     return newEstimate
 
@@ -150,7 +184,9 @@ def Main_Iteration(I, Ok, PSF, numberOfIterations):
 
     newEstimate = Ok
     iterator = 0
+    ListOfImages = []
     while iterator < numberOfIterations:
+        ListOfImages.append(newEstimate)
         newEstimate = Divide_OriginalBlurredImage(I, newEstimate, PSF)
         iterator = iterator + 1
 
@@ -160,40 +196,77 @@ def Main_Iteration(I, Ok, PSF, numberOfIterations):
         # cv2.waitKey(0)
         # cv2.destroyAllWindows()
 
-    cv2.imshow(text_string , newEstimate)
+    combinedImage = Combine_Images(ListOfImages)
+
+    cv2.imshow("Final combined Image (Summation Ok)" , combinedImage)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
     
-    return newEstimate
+    return combinedImage, ListOfImages
+
+def Combine_Images(ListOfImages):
+    numberOfImages = len(ListOfImages)
+    finalImage = np.zeros((ListOfImages[0].shape[0], ListOfImages[0].shape[1], ListOfImages[0].shape[2]), np.uint8)
+    for i in range(numberOfImages):
+        np.add(finalImage, ListOfImages[i], finalImage)
+
+    return finalImage
+
+
 
 def PrebuiltVersion_Main_Iteration(I, Ok, PSF, numberOfIterations):
 
     newEstimate = Ok
     iterator = 0
+    ListOfImages = []
 
     while iterator < numberOfIterations:
-
+        ListOfImages.append(newEstimate)
         #I = originalBlurredImage #From the formula
         denominator_array = PreBuilt_Gaussian_Blur(newEstimate)
         dividend = np.floor_divide(I, denominator_array)
         #transposedPSF = np.transpose(PSF)
         #correctionFactor = General_Gaussian_FilterBlur(dividend, transposedPSF)
+        oldEstimate = newEstimate
         newEstimate = np.multiply(newEstimate, dividend)
-
+        #Estimate_Convergence(newEstimate, oldEstimate)
         iterator = iterator + 1
 
         text_string = 'Prebuilt Main iteration %s' %iterator
         print(text_string)
-        cv2.imshow(text_string , newEstimate)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        
 
-    return newEstimate
+    combinedImage = Combine_Images(ListOfImages)
 
+    cv2.imshow(text_string , combinedImage)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
+    return combinedImage, ListOfImages
 
-     
+def Estimate_Convergence(newEstimate, oldEstimate):
+    Ok = oldEstimate
+    Ok_PlusOne = newEstimate
+    current_convergence = np.floor_divide(Ok, Ok_PlusOne)
 
+    print("Current Convergence: %d", current_convergence)
+
+    return current_convergence
+
+def Matrix_Testing(matrix, x_val, y_val):
+    pixel = matrix[x_val][y_val]
+    pixel_R = matrix[x_val][y_val][0]
+    pixel_G = matrix[x_val][y_val][1]
+    pixel_B = matrix[x_val][y_val][2]
+    #print("The Pixel value at %d and %d is: %s", %x_val, %y_val, %pixel)
+    print("Red: %d" % pixel_R)
+    print("Green: %d" % pixel_G)
+    print("Blue: %d" % pixel_B)
+    print(pixel)
+
+    
+
+    return None
 
 
 def main():
@@ -209,7 +282,7 @@ def main():
     origBlurredImage = cv2.imread(BlurredImage, 1) # Loads the blurred image matrix
     copy_origBlurredImage = origBlurredImage.copy() # for greyscale
     imageHeight = origBlurredImage.shape[0] #Find how many pixels high the image is
-    imageWidth = origBlurredImage.shape[0] #Width
+    imageWidth = origBlurredImage.shape[1] #Width
     blackImage = np.zeros((imageHeight, imageWidth)) # Create a black image (zeroes array) of same size, for later use. 
 
     # PSF = Create_PointSpreadFunction(9, [1,2,1,2,4,2,1,2,1]) #change this function to every row gets its own list
@@ -223,32 +296,40 @@ def main():
 # Many of the image displays are commented out for ease of running the program, but they can be 
 # uncommented for troubleshooting purposes, or removed later for cleaner code. 
 
- 
-
-    # #Run the gaussian blur on the sharp colored image
-    # coloredBlurAttempt = PreBuilt_Gaussian_Blur(origUnblurredImage)
-    # cv2.imshow('After Colored Gaussian Blur', coloredBlurAttempt)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
 
     # #GreyScale the sharp image and display
     greyUnblurredImage = GreyScale_Image(origUnblurredImage)
     
 
-    scaledOriginalBlurred = Resize_Image(origBlurredImage, 20)
-    scaledGreyUnblurredImage = Resize_Image(greyUnblurredImage, 20)
-    # selfFilterImage = General_Gaussian_FilterBlur(scaledGreyUnblurredImage)
-    # cv2.imshow('General Gaus blur on greyScale Image', selfFilterImage)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
-    
-    blurEstimateTest = Blur_Estimate(scaledGreyUnblurredImage)
-    # cv2.imshow('Blur_Estimate on resized greyScale Image', blurEstimateTest)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
+    scaledOriginalBlurred = Resize_Image(origBlurredImage, 10)
+    scaledGreyUnblurredImage = Resize_Image(greyUnblurredImage, 10)
+    scaledGreyBlurredImage = GreyScale_Image(scaledOriginalBlurred)
+   
+    InitialFilterImage = General_Gaussian_FilterBlur(scaledOriginalBlurred)
+    finalEstimate, ListOfEstimates = Main_Iteration(InitialFilterImage, InitialFilterImage, PSF, 400)
+    #finalEstimate, ListOfEstimates = PrebuiltVersion_Main_Iteration(InitialFilterImage, InitialFilterImage, PSF, 1000)
 
-    Main_Iteration(scaledGreyUnblurredImage, blurEstimateTest, PSF, 15)
-    #PrebuiltVersion_Main_Iteration(scaledGreyUnblurredImage, blurEstimateTest, PSF, 10)
+    directory = r"C:\Users\Benjamin\Desktop\Temp_Image_Deblurring"
+    #os.chdir(directory)
+    Internal_Combination_List = []
+
+    for i in range(len(ListOfEstimates)//10):
+        if i == 0:
+            number = i
+            Internal_Combination_List.append(ListOfEstimates[number])
+            Inner_Combination_PlaceHolder = Combine_Images(Internal_Combination_List)
+            fileName = 'Image %d.png' %number
+            #cv2.imread(ListOfEstimates[i])
+            cv2.imwrite(fileName, Inner_Combination_PlaceHolder)
+        else:
+            number = i * 20
+            Internal_Combination_List.append(ListOfEstimates[number - 1])
+            Inner_Combination_PlaceHolder = Combine_Images(Internal_Combination_List)
+            fileName = 'Image %d.png' %number
+            #cv2.imread(ListOfEstimates[i])
+            cv2.imwrite(fileName, Inner_Combination_PlaceHolder)
+    
+    Matrix_Testing(scaledOriginalBlurred, 10, 10)
     
 
 
