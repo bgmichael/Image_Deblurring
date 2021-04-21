@@ -181,7 +181,7 @@ def Divide_OriginalBlurredImage(originalBlurredImage, currentEstimate, PSF):
 
 
 def Main_Iteration(I, Ok, PSF, numberOfIterations):
-
+    #Value follow the RLA algorithm. I = original blurred image / Ok = current estimate / PSF = Point Spread Function
     newEstimate = Ok
     iterator = 0
     ListOfImages = []
@@ -205,6 +205,8 @@ def Main_Iteration(I, Ok, PSF, numberOfIterations):
     return combinedImage, ListOfImages
 
 def Combine_Images(ListOfImages):
+    #Takes each estimant from the iterations and iteratively combines them into a single image
+    #finalImage is the combined image
     numberOfImages = len(ListOfImages)
     finalImage = np.zeros((ListOfImages[0].shape[0], ListOfImages[0].shape[1], ListOfImages[0].shape[2]), np.uint8)
     for i in range(numberOfImages):
@@ -245,6 +247,7 @@ def PrebuiltVersion_Main_Iteration(I, Ok, PSF, numberOfIterations):
     return combinedImage, ListOfImages
 
 def Estimate_Convergence(newEstimate, oldEstimate):
+    #Not utalized yet, it will be the method by which it is determined if the iterations should continue
     Ok = oldEstimate
     Ok_PlusOne = newEstimate
     current_convergence = np.floor_divide(Ok, Ok_PlusOne)
@@ -254,6 +257,7 @@ def Estimate_Convergence(newEstimate, oldEstimate):
     return current_convergence
 
 def Matrix_Testing(matrix, x_val, y_val):
+    #Just a function to test the outputs of a particular pixel in a image matrix
     pixel = matrix[x_val][y_val]
     pixel_R = matrix[x_val][y_val][0]
     pixel_G = matrix[x_val][y_val][1]
@@ -263,8 +267,6 @@ def Matrix_Testing(matrix, x_val, y_val):
     print("Green: %d" % pixel_G)
     print("Blue: %d" % pixel_B)
     print(pixel)
-
-    
 
     return None
 
@@ -300,11 +302,11 @@ def main():
     # #GreyScale the sharp image and display
     greyUnblurredImage = GreyScale_Image(origUnblurredImage)
     
-
+    #Resize the image so it is more managable for iterations
     scaledOriginalBlurred = Resize_Image(origBlurredImage, 10)
     scaledGreyUnblurredImage = Resize_Image(greyUnblurredImage, 10)
     scaledGreyBlurredImage = GreyScale_Image(scaledOriginalBlurred)
-   
+    
     InitialFilterImage = General_Gaussian_FilterBlur(scaledOriginalBlurred)
     finalEstimate, ListOfEstimates = Main_Iteration(InitialFilterImage, InitialFilterImage, PSF, 400)
     #finalEstimate, ListOfEstimates = PrebuiltVersion_Main_Iteration(InitialFilterImage, InitialFilterImage, PSF, 1000)
@@ -312,7 +314,9 @@ def main():
     directory = r"C:\Users\Benjamin\Desktop\Temp_Image_Deblurring"
     #os.chdir(directory)
     Internal_Combination_List = []
-
+    #The below code will most likely be moved to its own function.
+    #It takes the output list from the main iteration program and prints each matrix into an image 
+    #The image is stored for later comparison
     for i in range(len(ListOfEstimates)//10):
         if i == 0:
             number = i
