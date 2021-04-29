@@ -34,6 +34,16 @@ def Resize_Image(image, scalingFactor):
    
     return resized
 
+def Combine_Images(ListOfImages):
+    #Takes each estimant from the iterations and iteratively combines them into a single image
+    #finalImage is the combined image
+    numberOfImages = len(ListOfImages)
+    finalImage = np.zeros((ListOfImages[0].shape[0], ListOfImages[0].shape[1], ListOfImages[0].shape[2]), np.uint8)
+    for i in range(numberOfImages):
+        np.add(finalImage, ListOfImages[i], finalImage)
+
+    return finalImage
+
 
 
 def GreyScale_Image(imageMatrix):
@@ -140,6 +150,63 @@ def PreBuilt_Gaussian_Blur(imageArray):
     blurredGausImage = gaussian_filter(imageArray, sigma=1)
     return blurredGausImage
 
+def PrebuiltVersion_Main_Iteration(I, Ok, PSF, numberOfIterations):
+    
+    newEstimate = Ok
+    iterator = 0
+    ListOfImages = []
+
+    while iterator < numberOfIterations:
+        ListOfImages.append(newEstimate)
+        #I = originalBlurredImage #From the formula
+
+        denominator_array = Prebuilt_Convolultion(newEstimate, PSF)
+
+        dividend = np.floor_divide(I, denominator_array)
+
+        transposedPSF = np.transpose(PSF)
+        correctionFactor = Prebuilt_Convolultion(dividend, transposedPSF)
+
+        oldEstimate = newEstimate
+        newEstimate = np.multiply(newEstimate, correctionFactor)
+        #Estimate_Convergence(newEstimate, oldEstimate)
+        iterator = iterator + 1
+
+        text_string = 'Prebuilt Conv. iter.  %s' %iterator
+        print(text_string)
+        
+    #combinedImage = Combine_Images(ListOfImages)
+
+    cv2.imshow(text_string , newEstimate)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+    return newEstimate, ListOfImages
+
+def Estimate_Convergence(newEstimate, oldEstimate):
+    #Not utalized yet, it will be the method by which it is determined if the iterations should continue
+    Ok = oldEstimate
+    Ok_PlusOne = newEstimate
+    current_convergence = np.floor_divide(Ok, Ok_PlusOne)
+
+    print("Current Convergence: %d", current_convergence)
+
+    return current_convergence
+
+def Matrix_Testing(matrix, x_val, y_val):
+    #Just a function to test the outputs of a particular pixel in a image matrix
+    pixel = matrix[x_val][y_val]
+    pixel_R = matrix[x_val][y_val][0]
+    pixel_G = matrix[x_val][y_val][1]
+    pixel_B = matrix[x_val][y_val][2]
+    #print("The Pixel value at %d and %d is: %s", %x_val, %y_val, %pixel)
+    print("Red: %d" % pixel_R)
+    print("Green: %d" % pixel_G)
+    print("Blue: %d" % pixel_B)
+    print(pixel)
+
+    return None
+
 def General_Gaussian_FilterBlur(image, gauss=None):
     #A Gaussian blur to an image, with a hard coded filter. Creates a zeroes array, computers the convolution;
     #and then fills in the zeroes array as the return. The quadruple nested for loop is the traversal of the image
@@ -187,6 +254,18 @@ def General_Gaussian_FilterBlur(image, gauss=None):
         #out = np.zeros((h+2, w+2, 3), np.uint8)
         out = np.zeros((h+2, w+2, d))
 
+        numberCol = len(out[0])
+        numberRows = len(out)
+        row1 = image[0]
+        lastRow = image[numberRows-1]
+        col1 = image[:,0]
+        lastCol = image[:,(numberCol-1)]
+        out[0] = row1
+        out[numberRows-1] = lastRow
+        out[:,(numberCol-1)] = lastCol
+        out[:,0] = col1
+
+
         for i in range(h): #navigate the rows
             for j in range(w): #navigate the columns
                 for k in range(d):
@@ -232,7 +311,6 @@ def General_Gaussian_FilterBlur(image, gauss=None):
         
     numberCol = len(out[0])
     numberRows = len(out)
-
     row1 = image[0]
     lastRow = image[numberRows-1]
     col1 = image[:,0]
@@ -270,10 +348,6 @@ def Divide_OriginalBlurredImage(originalBlurredImage, currentEstimate, PSF):
     denominator_array = Blur_Estimate(currentEstimate, PSF)
   
     # dividend = np.floor_divide(I, denominator_array)
-
-    # cv2.imshow("dividend" , dividend)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
 
     dividend = np.divide(I, denominator_array)
     out = dividend
@@ -362,82 +436,18 @@ def TurnMatrix_To_uint(array):
 
     return out
 
-def Combine_Images(ListOfImages):
-    #Takes each estimant from the iterations and iteratively combines them into a single image
-    #finalImage is the combined image
-    numberOfImages = len(ListOfImages)
-    finalImage = np.zeros((ListOfImages[0].shape[0], ListOfImages[0].shape[1], ListOfImages[0].shape[2]), np.uint8)
-    for i in range(numberOfImages):
-        np.add(finalImage, ListOfImages[i], finalImage)
-
-    return finalImage
-
-
-def PrebuiltVersion_Main_Iteration(I, Ok, PSF, numberOfIterations):
-
-    newEstimate = Ok
-    iterator = 0
-    ListOfImages = []
-
-    while iterator < numberOfIterations:
-        ListOfImages.append(newEstimate)
-        #I = originalBlurredImage #From the formula
-
-        denominator_array = Prebuilt_Convolultion(newEstimate, PSF)
-
-        dividend = np.floor_divide(I, denominator_array)
-
-        transposedPSF = np.transpose(PSF)
-        correctionFactor = Prebuilt_Convolultion(dividend, transposedPSF)
-
-        oldEstimate = newEstimate
-        newEstimate = np.multiply(newEstimate, correctionFactor)
-        #Estimate_Convergence(newEstimate, oldEstimate)
-        iterator = iterator + 1
-
-        text_string = 'Prebuilt Conv. iter.  %s' %iterator
-        print(text_string)
-        
-    #combinedImage = Combine_Images(ListOfImages)
-
-    cv2.imshow(text_string , newEstimate)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-
-    return newEstimate, ListOfImages
-
-def Estimate_Convergence(newEstimate, oldEstimate):
-    #Not utalized yet, it will be the method by which it is determined if the iterations should continue
-    Ok = oldEstimate
-    Ok_PlusOne = newEstimate
-    current_convergence = np.floor_divide(Ok, Ok_PlusOne)
-
-    print("Current Convergence: %d", current_convergence)
-
-    return current_convergence
-
-def Matrix_Testing(matrix, x_val, y_val):
-    #Just a function to test the outputs of a particular pixel in a image matrix
-    pixel = matrix[x_val][y_val]
-    pixel_R = matrix[x_val][y_val][0]
-    pixel_G = matrix[x_val][y_val][1]
-    pixel_B = matrix[x_val][y_val][2]
-    #print("The Pixel value at %d and %d is: %s", %x_val, %y_val, %pixel)
-    print("Red: %d" % pixel_R)
-    print("Green: %d" % pixel_G)
-    print("Blue: %d" % pixel_B)
-    print(pixel)
-
-    return None
-
 
 def main():
+     #BlurredImage = "NikonBlurred.jpg"
 
-    UnblurredImage = "NikonSharp.jpg"
-    #BlurredImage = "NikonBlurred.jpg"
-    BlurredImage = "NikonFocusBlurred.jpg"
+    # UnblurredImage = "NikonSharp.jpg"
+    # BlurredImage = "NikonFocusBlurred.jpg"
     # UnblurredImage = "BuildingSharp.jpg"
     # BlurredImage = "BuildingDefocusedBlurred.jpg"
+    # UnblurredImage = "HonorSharp.jpg"
+    # BlurredImage = "HonorBlurred.jpg"
+    UnblurredImage = "BedroomSharp.jpg"
+    BlurredImage = "BedroomBlurred.jpg"
 
 #LOAD IMAGES
 #Here we load the two images into the program as matrices. We create copies and blank images of 
@@ -473,7 +483,7 @@ def main():
     greyUnblurredImage = GreyScale_Image(origUnblurredImage)
     
     #Resize the image so it is more managable for iterations
-    scaleFactor = 15
+    scaleFactor = 25
     scaledOriginalBlurred = Resize_Image(origBlurredImage, scaleFactor)
     #scaledGreyUnblurredImage = Resize_Image(greyUnblurredImage, scaleFactor)
     scaledOriginalUnblurred = Resize_Image(origUnblurredImage, scaleFactor)
@@ -485,38 +495,16 @@ def main():
 
 
     #InitialFilterImage = General_Gaussian_FilterBlur(scaledOriginalUnblurred)
-    # subtract1O = np.subtract(scaledOriginalUnblurred, InitialFilterImage)
-    # cv2.imshow("Unblurred minus 1st Gaus" , subtract1O)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
-
     #InitialFilterImage2 = General_Gaussian_FilterBlur(InitialFilterImage)
-    # subtract21 = np.subtract(InitialFilterImage, InitialFilterImage2)
-    # cv2.imshow("1st minus 2nd Gaus" , subtract21)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
-
     #InitialFilterImage3 = General_Gaussian_FilterBlur(InitialFilterImage2)
-    # subtract32 = np.subtract(InitialFilterImage2, InitialFilterImage3)
-    # cv2.imshow("1st minus 2nd Gaus" , subtract32)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
-
     #InitialFilterImage4 = General_Gaussian_FilterBlur(InitialFilterImage3)
-    # subtract43 = np.subtract(InitialFilterImage3, InitialFilterImage4)
-    # cv2.imshow("4th minus 2nd Gaus" , subtract43)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
-
     # InitialFilterImage = TurnMatrix_To_uint(InitialFilterImage)
-    # cv2.imshow("First Gaussian Blur on Unblurred Image" , InitialFilterImage)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
-
+   
    
 
     #finalEstimate, ListOfEstimates = Main_Iteration(InitialFilterImage, InitialFilterImage, PSF, 5)
-    finalEstimate, ListOfEstimates, ListOfDifferences = Main_Iteration_V2(scaledOriginalBlurred, scaledOriginalBlurred, PSF, 5, scaledOriginalUnblurred)
+    finalEstimate, ListOfEstimates, ListOfDifferences = Main_Iteration_V2(scaledOriginalBlurred, 
+    scaledOriginalBlurred, PSF, 5, scaledOriginalUnblurred)
     #finalEstimate, ListOfEstimates, ListOfDifferences = Main_Iteration_V2(InitialFilterImage3, InitialFilterImage3, PSF, 5, scaledOriginalUnblurred)
     #finalEstimate, ListOfEstimates = PrebuiltVersion_Main_Iteration(InitialFilterImage2, InitialFilterImage2, PSF, 200)
 
@@ -533,14 +521,12 @@ def main():
             Internal_Combination_List.append(ListOfEstimates[number])
             Inner_Combination_PlaceHolder = Combine_Images(Internal_Combination_List)
             fileName = 'Image %d.png' %number
-            #cv2.imread(ListOfEstimates[i])
             cv2.imwrite(fileName, ListOfEstimates[number])
         else:
             number = i * 1
             Internal_Combination_List.append(ListOfEstimates[number - 1])
             Inner_Combination_PlaceHolder = Combine_Images(Internal_Combination_List)
             fileName = 'Image %d.png' %number
-            #cv2.imread(ListOfEstimates[i])
             cv2.imwrite(fileName, ListOfEstimates[number])
     
 
