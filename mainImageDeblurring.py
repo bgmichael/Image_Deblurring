@@ -127,38 +127,16 @@ def Create_PointSpreadFunction(windowSize, valueList):
 
     return blankBaseMatrix
 
-def Main_Iteration(I, Ok, PSF, numberOfIterations):
-    #Value follow the RLA algorithm. I = original blurred image / Ok = current estimate / PSF = Point Spread Function
-    newEstimate = Ok
-    iterator = 0
-    ListOfImages = []
-    while iterator < numberOfIterations:
-        ListOfImages.append(newEstimate)
-        newEstimate = Divide_OriginalBlurredImage(I, newEstimate, PSF)
-        iterator = iterator + 1
-
-        text_string = 'Main iteration %s' %iterator
-        print(text_string)
-       
-    combinedImage = Combine_Images(ListOfImages)
-
-    cv2.imshow("Final combined Image (Summation Ok)" , combinedImage)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-    
-    return combinedImage, ListOfImages
 
 def PreBuilt_Gaussian_Blur(imageArray):
+    #Does not function correctly, for the purposes of our algorithm
     blurredGausImage = gaussian_filter(imageArray, sigma=1)
-
-    # cv2.imshow("Prebuilt. Gaus" , blurredGausImage)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
 
     return blurredGausImage
 
 def PrebuiltVersion_Main_Iteration(I, Ok, PSF, numberOfIterations):
-    
+    # An attempt to use prebuilt convolution and blurring function as a test base for our version. Did not deblur image, so it 
+    # was put on hold. Could be useful to debug for future improvement. 
     newEstimate = Ok
     iterator = 0
     ListOfImages = []
@@ -168,12 +146,9 @@ def PrebuiltVersion_Main_Iteration(I, Ok, PSF, numberOfIterations):
         #I = originalBlurredImage #From the formula
 
         denominator_array = Prebuilt_Convolultion(newEstimate, PSF)
-
         dividend = np.floor_divide(I, denominator_array)
-
         transposedPSF = np.transpose(PSF)
         correctionFactor = Prebuilt_Convolultion(dividend, transposedPSF)
-
         oldEstimate = newEstimate
         newEstimate = np.multiply(newEstimate, correctionFactor)
         #Estimate_Convergence(newEstimate, oldEstimate)
@@ -191,7 +166,7 @@ def PrebuiltVersion_Main_Iteration(I, Ok, PSF, numberOfIterations):
     return newEstimate, ListOfImages
 
 def Estimate_Convergence(newEstimate, oldEstimate):
-    #Not utalized yet, it will be the method by which it is determined if the iterations should continue
+    #Not utalized yet, it will be the method by which it is determined if the iterations should continue 
     Ok = oldEstimate
     Ok_PlusOne = newEstimate
     current_convergence = np.floor_divide(Ok, Ok_PlusOne)
@@ -201,7 +176,7 @@ def Estimate_Convergence(newEstimate, oldEstimate):
     return current_convergence
 
 def Matrix_Testing(matrix, x_val, y_val):
-    #Just a function to test the outputs of a particular pixel in a image matrix
+    #Just a function to test the outputs of a particular pixel in a image matrix, used for debugging purposes
     pixel = matrix[x_val][y_val]
     pixel_R = matrix[x_val][y_val][0]
     pixel_G = matrix[x_val][y_val][1]
@@ -236,7 +211,7 @@ def General_Gaussian_FilterBlur(image, gauss=None):
         for j in range(len(gauss[i])):
             filterWeight = filterWeight + gauss[i][j]
     
-  
+    #below loop is for grayscale images, not used in final implementation
     if len(image.shape) == 2:
 
 
@@ -254,7 +229,7 @@ def General_Gaussian_FilterBlur(image, gauss=None):
                         sum += int(image[i + ki][j + kj] * gauss[ki][kj]) #multiple the kernel value by the image array pixel
 
                 out[i + offset][j + offset] = sum/filterWeight #normalizing the blur by dividing by the kernel weight
-
+    #For color images
     elif len(image.shape) == 3:
 
         h = (len(image))
@@ -309,11 +284,8 @@ def General_Gaussian_FilterBlur(image, gauss=None):
                             
                             sum = sum + int(image_pixel_value * filter_value)
                             #sum = sum + (image_pixel_value * filter_value)
-
-
-                    #out[i][j][k] = sum/filterWeight
+                            # not casting the sum to an integer value yielded poor results
                     new_pixel_component = sum/filterWeight
-                    #new_pixel_component = round(new_pixel_component)
                     if new_pixel_component == 0:
                         new_pixel_component = 1
                     out[i + offset][j + offset][k] = new_pixel_component
@@ -351,6 +323,7 @@ def Divide_OriginalBlurredImage(originalBlurredImage, currentEstimate, PSF):
 
 
 def Main_Iteration_V2(I, Ok, PSF, numberOfIterations, UnblurredImage=None):
+    #This is the main loop for the final implementation of the RLA. It calls most other functions during its execution. 
     currentEstimate = Ok
     newEstimate = currentEstimate
     newEstimate_temp = Ok
@@ -367,8 +340,9 @@ def Main_Iteration_V2(I, Ok, PSF, numberOfIterations, UnblurredImage=None):
     while iterator < numberOfIterations and stop_Flag == 0:
         startLoop_Time = time.perf_counter()
         if iterator > 0:
-            if (iterator % 5) == 0:
-                stopMatrix, stop_List, stop_Flag = Estimate_Image_Convergence(newEstimate, oldEstimate, 1.03, .97, .95)
+            if (iterator > 50) == 0:
+                stopMatrix, stop_List, stop_Flag = Estimate_Image_Convergence(newEstimate, oldEstimate, 1.01, .99, .95)
+                #The above two loops are placeholders for future implementation of convergence functions.
 
         text_string = 'New Est. B4 Divide %s' %iterator
         ListOfImages.append(newEstimate)
@@ -387,12 +361,20 @@ def Main_Iteration_V2(I, Ok, PSF, numberOfIterations, UnblurredImage=None):
         out = TurnMatrix_To_uint(newEstimate)
         ChangesMatrix = np.subtract(oldEstimate, out)
         ListOfDifferences.append(ChangesMatrix)
-        cv2.imshow("Difference" , ChangesMatrix)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+
+        endLoop_Time = time.perf_counter()
+
+        # cv2.imshow("Difference" , ChangesMatrix)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
+
         sumPixels = np.sum(ChangesMatrix)
-        averagePixels = sumPixels // ((len(ChangesMatrix)*(len(ChangesMatrix[0])*3)))
-        if averagePixels < 10:
+        numberOfpixels = ((len(ChangesMatrix)*(len(ChangesMatrix[0])*3)))
+        averagePixels = sumPixels // numberOfpixels
+        if averagePixels < 2:
+            print(averagePixels)
+            print(sumPixels)
+            print(numberOfpixels)
             stop_Flag = 1
             print("Stop Flag Triggered %s" %iterator)
         text_string = 'New Estimate iter. %s' %iterator
@@ -401,16 +383,19 @@ def Main_Iteration_V2(I, Ok, PSF, numberOfIterations, UnblurredImage=None):
         print(text_string)
         text_string = 'New Estimate iter. %s' %iterator
 
-        endLoop_Time = time.perf_counter()
+
+        # cv2.imshow(text_string , newEstimate)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
 
         LoopTime = endLoop_Time - startLoop_Time
         loop_text = ("Loop", iterator, "time: ", LoopTime)
         print(loop_text)
         iterator = iterator + 1
            
-    cv2.imshow(text_string , newEstimate)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    # cv2.imshow(text_string , newEstimate)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
 
     return newEstimate, ListOfImages, ListOfDifferences
 
@@ -431,13 +416,26 @@ def Save_ImageList(ListOfImages, ImageName, directory, saveFactor):
             #Inner_Combination_PlaceHolder = Combine_Images(Internal_Combination_List)
             name = ImageName + str(number)
             fileName = '%s.png' %name
+            text_string = "Iteration: %d" %i
+
+            cv2.imshow(text_string , ListOfImages[number])
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+
             cv2.imwrite(fileName, ListOfImages[number])
         else:
             number = i * saveFactor
-            Internal_Combination_List.append(ListOfImages[number - 1])
+            Internal_Combination_List.append(ListOfImages[number])
             #Inner_Combination_PlaceHolder = Combine_Images(Internal_Combination_List)
             name = ImageName + str(number)
             fileName = '%s.png' %name
+
+            text_string = "Iteration number: %d" %number
+
+            cv2.imshow(text_string , ListOfImages[number])
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+
             cv2.imwrite(fileName, ListOfImages[number])
 
     return None
@@ -517,8 +515,6 @@ def Estimate_Image_Convergence(newEstimate, oldEstimate, upper_threshold, lower_
 
 
 def main():
-     #BlurredImage = "NikonBlurred.jpg"
-
     # UnblurredImage = "NikonSharp.jpg"
     # BlurredImage = "NikonFocusBlurred.jpg"
     # UnblurredImage = "BuildingSharp.jpg"
@@ -545,17 +541,28 @@ def main():
     imageHeight = origBlurredImage.shape[0] #Find how many pixels high the image is
     imageWidth = origBlurredImage.shape[1] #Width
     blackImage = np.zeros((imageHeight, imageWidth)) # Create a black image (zeroes array) of same size, for later use. 
+    # PSF =       [[0, 2, 0],
+    #              [2, 4, 2],
+    #              [0, 2, 0],
+    #              ] 
+
     PSF =       [[1, 2, 1],
                  [2, 4, 2],
                  [1, 2, 1],
                  ] 
-
+    #For testing of the prebuilt SCIPY RLA function. Did not work correctly. 
     PSF2 = [[[1/16,1/16,1/16],[2/16,2/16,2/16],[1/16,1/16,1/16]],
     [[2/16,2/16,2/16],[4/16,4/16,4/16],[2/16,2/16,2/16]],
     [[1/16,1/16,1/16],[2/16,2/16,2/16],[1/16,1/16,1/16]]]
 
     numpy_PSF = np.array(PSF2)
+    # testImage = restoration.richardson_lucy(scaledOriginalBlurred, numpy_PSF, 5, 'same')
+    # cv2.imshow("Prebuilt Restoration" , testImage)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
 
+
+    #A test to see if the program could incooperate a larger blur kernel. Was able to run, but degraded blurring performance. 
     PSF_5 = [
     [1,4,6,4,1],
     [4,16,24,26,4],
@@ -563,46 +570,37 @@ def main():
     [4,16,24,16,4],
     [1,4,6,4,1]]
 
-     
-    # testImage = restoration.richardson_lucy(scaledOriginalBlurred, numpy_PSF, 5, 'same')
-    # cv2.imshow("Prebuilt Restoration" , testImage)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
+    
 
 # Below we display several images, testing the pre built greyScale and guassian blur functions
 # Many of the image displays are commented out for ease of running the program, but they can be 
 # uncommented for troubleshooting purposes, or removed later for cleaner code. 
 
-    
     greyUnblurredImage = GreyScale_Image(origUnblurredImage)
-    scaleFactor = 10
+    scaleFactor = 15
     scaledOriginalBlurred = Resize_Image(origBlurredImage, scaleFactor)
     scaledOriginalUnblurred = Resize_Image(origUnblurredImage, scaleFactor)
     scaledGreyBlurredImage = GreyScale_Image(scaledOriginalBlurred)
     baseSubtract = np.subtract(scaledOriginalUnblurred,scaledOriginalBlurred)
 
-    InitialFilterImage = General_Gaussian_FilterBlur(scaledOriginalUnblurred)
-    InitialFilterImage2 = General_Gaussian_FilterBlur(InitialFilterImage)
-    #InitialFilterImage3 = General_Gaussian_FilterBlur(InitialFilterImage2)
-    #InitialFilterImage4 = General_Gaussian_FilterBlur(InitialFilterImage3)
-    RectifiedInitialFilterImage = TurnMatrix_To_uint(InitialFilterImage2)
 
-    cv2.imshow("Initial Gaussian Blur" , RectifiedInitialFilterImage)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    # InitialFilterImage = General_Gaussian_FilterBlur(scaledOriginalUnblurred)
+    # InitialFilterImage2 = General_Gaussian_FilterBlur(InitialFilterImage)
+    # RectifiedInitialFilterImage = TurnMatrix_To_uint(InitialFilterImage2)
+
+    # cv2.imshow("Initial Gaussian Blur" , RectifiedInitialFilterImage)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
    
    
 
-    finalEstimate, ListOfEstimates, ListOfDifferences = Main_Iteration_V2(RectifiedInitialFilterImage, 
-    RectifiedInitialFilterImage, PSF, 5, scaledOriginalUnblurred)
-
-    #finalEstimate, ListOfEstimates, ListOfDifferences = Main_Iteration_V2(InitialFilterImage3, InitialFilterImage3, PSF, 5, scaledOriginalUnblurred)
-    #finalEstimate, ListOfEstimates = PrebuiltVersion_Main_Iteration(InitialFilterImage2, InitialFilterImage2, PSF, 200)
+    finalEstimate, ListOfEstimates, ListOfDifferences = Main_Iteration_V2(scaledOriginalBlurred, 
+    scaledOriginalBlurred, PSF, 10, scaledOriginalUnblurred)
 
     #os.chdir(directory)
     directory = r"C:\Users\Benjamin\Desktop\Temp_Image_Deblurring\OutputPictures"
     saveFactor = 1
-    Save_ImageList(ListOfEstimates, BlurredImage, directory,saveFactor)
+    Save_ImageList(ListOfEstimates, BlurredImage, directory, saveFactor)
 
     for image in range(len(ListOfDifferences)):
         text_string = "Difference %s" %image
